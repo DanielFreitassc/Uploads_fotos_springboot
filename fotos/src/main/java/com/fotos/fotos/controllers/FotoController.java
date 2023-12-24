@@ -1,62 +1,71 @@
 package com.fotos.fotos.controllers;
 
+import java.io.IOException;
+import java.net.MalformedURLException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Controller;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-
-import com.fotos.fotos.utils.UploadUtils;
-
+import com.fotos.fotos.utils.Hd;
 
 
-@Controller
-@RequestMapping("/foto")
+
+@RestController
+@RequestMapping("/fotos")
 public class FotoController {
+    @Autowired
+    private Hd hd;
+    @CrossOrigin(origins = "*", allowedHeaders ="*")
+    @PostMapping
+	public void upload(@RequestParam MultipartFile foto) {
+		hd.salvarFoto(foto);
+	}
+    @CrossOrigin(origins = "*", allowedHeaders ="*")
+    @GetMapping("/{filename}")
+    public ResponseEntity<Resource> getFoto(@PathVariable String filename) {
+        Path filePath = hd.obterCaminhoFoto(filename);
 
-    @RequestMapping("/uploadForm")
-    public String uploadForm() {
-        return "uploadForm"; // Se precisar de uma página HTML, mantenha essa parte
-    }
-
-    @PostMapping("/upload")
-    public ResponseEntity<String> singleFileUpload(@RequestParam("file") MultipartFile file) {
         try {
-            if (file.isEmpty()) {
-                return ResponseEntity.badRequest().body("Por favor, selecione um arquivo para fazer upload.");
-            }
-
-            boolean uploadSuccess = UploadUtils.fazerUploadImagem(file);
-
-            if (uploadSuccess) {
-                return ResponseEntity.ok("Arquivo carregado com sucesso.");
+            Resource resource = new UrlResource(filePath.toUri());
+            if (resource.exists() || resource.isReadable()) {
+                return ResponseEntity.ok()
+                        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + resource.getFilename() + "\"")
+                        .body(resource);
             } else {
-                return ResponseEntity.status(500).body("Falha ao carregar o arquivo.");
+                return ResponseEntity.notFound().build();
             }
-        } catch (Exception e) {
-            return ResponseEntity.status(500).body("Erro durante o upload do arquivo: " + e.getMessage());
+        } catch (MalformedURLException e) {
+            throw new RuntimeException("Erro ao obter o recurso da foto.", e);
         }
     }
 
-    // Exemplo de outro método usando UploadUtils (adapte conforme necessário)
-    @PostMapping("/outraRotaDeUpload")
-    public ResponseEntity<String> outraRotaDeUpload(@RequestParam("file") MultipartFile file) {
-        try {
-            if (file.isEmpty()) {
-                return ResponseEntity.badRequest().body("Por favor, selecione um arquivo para fazer upload.");
-            }
+    @CrossOrigin(origins = "*", allowedHeaders ="*")
+    @DeleteMapping("/{filename}")
+    public ResponseEntity<Void> deletarFoto(@PathVariable String filename) {
+        Path filePath = hd.obterCaminhoFoto(filename);
 
-            boolean uploadSuccess = UploadUtils.fazerOutraOperacao(file);
-
-            if (uploadSuccess) {
-                return ResponseEntity.ok("Arquivo carregado com sucesso usando outra operação.");
-            } else {
-                return ResponseEntity.status(500).body("Falha ao carregar o arquivo usando outra operação.");
+        if (Files.exists(filePath)) {
+            try {
+                Files.delete(filePath);
+                return ResponseEntity.noContent().build();
+            } catch (IOException e) {
+                throw new RuntimeException("Erro ao excluir a foto.", e);
             }
-        } catch (Exception e) {
-            return ResponseEntity.status(500).body("Erro durante o upload do arquivo: " + e.getMessage());
+        } else {
+            return ResponseEntity.notFound().build();
         }
     }
 }
